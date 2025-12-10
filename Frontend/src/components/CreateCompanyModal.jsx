@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { useCompany } from '../context/CompanyContext';
 
 const CreateCompanyModal = ({ onClose, onSuccess }) => {
-  const { user } = useAuth();
   const { createCompany } = useCompany();
   const [formData, setFormData] = useState({
     name: '',
@@ -26,16 +24,10 @@ const CreateCompanyModal = ({ onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      const company = createCompany({
-        ...formData,
-        ownerId: user.id,
-        ownerEmail: user.email,
-        ownerName: user.name
-      });
-
+      const company = await createCompany({ ...formData });
       onSuccess(company);
     } catch (err) {
-      setError('Failed to create company');
+      setError(err.message || 'Failed to create company');
     }
 
     setLoading(false);

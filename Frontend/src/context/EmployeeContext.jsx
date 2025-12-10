@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { useAuth } from './AuthContext';
+import { taskApi, screenshotApi } from '../api';
 
 const EmployeeContext = createContext();
 
@@ -11,6 +13,7 @@ export const useEmployee = () => {
 };
 
 export const EmployeeProvider = ({ children }) => {
+  const { getToken } = useAuth();
   const [currentTask, setCurrentTask] = useState('');
   const [tasks, setTasks] = useState([]);
   const [isTracking, setIsTracking] = useState(false);
@@ -23,34 +26,44 @@ export const EmployeeProvider = ({ children }) => {
 
   // Load data from localStorage on mount
   useEffect(() => {
-    const savedTasks = localStorage.getItem('employeeTasks');
-    const savedScreenshots = localStorage.getItem('employeeScreenshots');
     const savedInterval = localStorage.getItem('screenshotInterval');
-    
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
-    }
-    if (savedScreenshots) {
-      setScreenshots(JSON.parse(savedScreenshots));
-    }
     if (savedInterval) {
       setScreenshotInterval(Number(savedInterval));
     }
   }, []);
 
-  // Save tasks to localStorage whenever they change
   useEffect(() => {
-    if (tasks.length > 0) {
-      localStorage.setItem('employeeTasks', JSON.stringify(tasks));
-    }
-  }, [tasks]);
+    const token = getToken();
+    if (!token) return;
 
-  // Save screenshots to localStorage whenever they change
-  useEffect(() => {
-    if (screenshots.length > 0) {
-      localStorage.setItem('employeeScreenshots', JSON.stringify(screenshots));
-    }
-  }, [screenshots]);
+    const loadData = async () => {
+      try {
+        const tasksRes = await taskApi.list({}, token);
+        setTasks(tasksRes.data || []);
+        const shotsRes = await screenshotApi.list({}, token);
+        // Load image data for screenshots that have imageUrl
+        const screenshotsWithImages = await Promise.all(
+          (shotsRes.data || []).map(async (shot) => {
+            if (shot.imageUrl && !shot.data && !shot.imageData) {
+              try {
+                const { data } = await screenshotApi.getImage(shot.id, token);
+                return { ...shot, data: data?.imageData };
+              } catch (err) {
+                console.warn('Failed to load screenshot image', err);
+                return shot;
+              }
+            }
+            return shot;
+          })
+        );
+        setScreenshots(screenshotsWithImages);
+      } catch (error) {
+        console.warn('Could not load employee data', error.message);
+      }
+    };
+
+    loadData();
+  }, [getToken]);
 
   const startTracking = () => {
     setIsTracking(true);
@@ -60,22 +73,30 @@ export const EmployeeProvider = ({ children }) => {
   const stopTracking = () => {
     if (currentTask && startTime) {
       const endTime = new Date();
-      const duration = Math.floor((endTime - startTime) / 1000); // seconds
-      
+      const duration = Math.floor((endTime - startTime) / 1000);
+      const shotCount = screenshots.filter(
+        (s) => new Date(s.timestamp) >= startTime && new Date(s.timestamp) <= endTime
+      ).length;
+
+      const token = getToken();
       const newTask = {
-        id: Date.now(),
-        task: currentTask,
+        description: currentTask,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
-        duration: duration,
-        screenshots: screenshots.filter(
-          s => new Date(s.timestamp) >= startTime && new Date(s.timestamp) <= endTime
-        ).length
+        duration,
+        screenshotCount: shotCount,
       };
-      
-      setTasks(prev => [newTask, ...prev]);
+
+      if (token) {
+        taskApi
+          .create(newTask, token)
+          .then((res) => setTasks((prev) => [res.data, ...prev]))
+          .catch((err) => console.error('Failed to sync task', err));
+      } else {
+        setTasks((prev) => [{ id: Date.now(), ...newTask }, ...prev]);
+      }
     }
-    
+
     setIsTracking(false);
     setStartTime(null);
     setCurrentTask('');
@@ -138,6 +159,12 @@ export const EmployeeProvider = ({ children }) => {
             };
             
             setScreenshots(prev => [screenshot, ...prev]);
+
+            const token = getToken();
+            if (token) {
+              screenshotApi.upload({ imageData: screenshotData, timestamp: screenshot.timestamp }, token)
+                .catch((err) => console.error('Failed to upload screenshot', err));
+            }
             resolve();
           };
         });
@@ -200,12 +227,36 @@ export const EmployeeProvider = ({ children }) => {
     }
   };
 
-  const deleteTask = (taskId) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId));
+  const deleteTask = async (taskId) => {
+    const token = getToken();
+    if (token) {
+      try {
+        await taskApi.delete(taskId, token);
+        setTasks(prev => prev.filter(task => task.id !== taskId));
+      } catch (error) {
+        console.error('Failed to delete task', error);
+        // Still remove from local state on error
+        setTasks(prev => prev.filter(task => task.id !== taskId));
+      }
+    } else {
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+    }
   };
 
-  const deleteScreenshot = (screenshotId) => {
-    setScreenshots(prev => prev.filter(screenshot => screenshot.id !== screenshotId));
+  const deleteScreenshot = async (screenshotId) => {
+    const token = getToken();
+    if (token) {
+      try {
+        await screenshotApi.delete(screenshotId, token);
+        setScreenshots(prev => prev.filter(screenshot => screenshot.id !== screenshotId));
+      } catch (error) {
+        console.error('Failed to delete screenshot', error);
+        // Still remove from local state on error
+        setScreenshots(prev => prev.filter(screenshot => screenshot.id !== screenshotId));
+      }
+    } else {
+      setScreenshots(prev => prev.filter(screenshot => screenshot.id !== screenshotId));
+    }
   };
 
   const value = {

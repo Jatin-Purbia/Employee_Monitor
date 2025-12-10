@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useCompany } from '../context/CompanyContext';
 import Header from '../components/Header';
 
 const CreateCompany = () => {
-  const { user } = useAuth();
   const { createCompany } = useCompany();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -29,16 +27,10 @@ const CreateCompany = () => {
     setLoading(true);
 
     try {
-      const company = createCompany({
-        ...formData,
-        ownerId: user.id,
-        ownerEmail: user.email,
-        ownerName: user.name
-      });
-
+      await createCompany({ ...formData });
       navigate('/owner/dashboard');
     } catch (err) {
-      setError('Failed to create company');
+      setError(err.message || 'Failed to create company');
     }
 
     setLoading(false);

@@ -28,13 +28,13 @@ const InviteEmployeeModal = ({ companyId, onClose }) => {
     setLoading(true);
 
     try {
-      const invitation = inviteEmployee(email, companyId);
-      const link = `${window.location.origin}/join/${invitation.token}`;
+      const invitation = await inviteEmployee(companyId);
+      const link = invitation.invitationLink || `${window.location.origin}/join/${invitation.token}`;
       setJoinLink(link);
       setSuccess(true);
       setEmail('');
     } catch (err) {
-      setError('Failed to send invitation');
+      setError(err.message || 'Failed to send invitation');
     }
 
     setLoading(false);

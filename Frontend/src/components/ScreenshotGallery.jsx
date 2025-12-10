@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useEmployee } from '../context/EmployeeContext';
+import { useAuth } from '../context/AuthContext';
 import { formatDateTime } from '../utils/formatTime';
+import { screenshotApi } from '../api';
 
 const ScreenshotGallery = () => {
   const { screenshots, deleteScreenshot } = useEmployee();
+  const { getToken } = useAuth();
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+  const [loadingImages, setLoadingImages] = useState(new Set());
 
   if (screenshots.length === 0) {
     return (
@@ -20,6 +24,31 @@ const ScreenshotGallery = () => {
     );
   }
 
+  const loadScreenshotImage = async (shot) => {
+    if (shot.data || shot.imageData) {
+      return shot.data || shot.imageData;
+    }
+
+    if (shot.imageUrl || shot.id) {
+      try {
+        const token = getToken();
+        if (!token) return null;
+        
+        const { data } = await screenshotApi.getImage(shot.id, token);
+        return data?.imageData || null;
+      } catch (err) {
+        console.error('Failed to load screenshot image', err);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const handleOpen = async (shot) => {
+    const imageData = await loadScreenshotImage(shot);
+    setSelectedScreenshot({ ...shot, data: imageData || shot.data || shot.imageData });
+  };
+
   return (
     <>
       <div className="bg-white rounded-xl shadow-lg p-7 border border-gray-100">
@@ -29,12 +58,35 @@ const ScreenshotGallery = () => {
             <div
               key={screenshot.id}
               className="relative group cursor-pointer border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all hover:border-blue-300"
-              onClick={() => setSelectedScreenshot(screenshot)}
+              onClick={() => handleOpen(screenshot)}
             >
               <img
-                src={screenshot.data}
+                src={screenshot.data || screenshot.imageData || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Mb2FkaW5nLi4uPC90ZXh0Pjwvc3ZnPg=='}
                 alt={`Screenshot ${screenshot.id}`}
                 className="w-full h-32 object-cover"
+                onError={async (e) => {
+                  // Try to load image if not already loaded
+                  if (!screenshot.data && !screenshot.imageData) {
+                    const token = getToken();
+                    if (token && !loadingImages.has(screenshot.id)) {
+                      setLoadingImages(prev => new Set(prev).add(screenshot.id));
+                      try {
+                        const { data } = await screenshotApi.getImage(screenshot.id, token);
+                        if (data?.imageData) {
+                          e.target.src = data.imageData;
+                        }
+                      } catch (err) {
+                        console.error('Failed to load screenshot', err);
+                      } finally {
+                        setLoadingImages(prev => {
+                          const next = new Set(prev);
+                          next.delete(screenshot.id);
+                          return next;
+                        });
+                      }
+                    }
+                  }
+                }}
               />
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
                 <button
@@ -51,8 +103,8 @@ const ScreenshotGallery = () => {
                 </button>
               </div>
               <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2">
-                <p className="truncate">{screenshot.task}</p>
-                <p className="text-gray-300">{formatDateTime(screenshot.timestamp)}</p>
+                <p className="truncate">{screenshot.task || 'No task'}</p>
+                <p className="text-gray-300">{formatDateTime(screenshot.timestamp || screenshot.createdAt)}</p>
               </div>
             </div>
           ))}
@@ -74,14 +126,14 @@ const ScreenshotGallery = () => {
               </svg>
             </button>
             <img
-              src={selectedScreenshot.data}
+              src={selectedScreenshot.data || selectedScreenshot.imageData || ''}
               alt="Full screenshot"
               className="max-w-full max-h-full rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-4 rounded-b-lg">
-              <p className="font-semibold">{selectedScreenshot.task}</p>
-              <p className="text-sm text-gray-300">{formatDateTime(selectedScreenshot.timestamp)}</p>
+              <p className="font-semibold">{selectedScreenshot.task || 'No task'}</p>
+              <p className="text-sm text-gray-300">{formatDateTime(selectedScreenshot.timestamp || selectedScreenshot.createdAt)}</p>
             </div>
           </div>
         </div>

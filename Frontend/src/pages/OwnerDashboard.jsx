@@ -7,22 +7,18 @@ import InviteEmployeeModal from '../components/InviteEmployeeModal';
 
 const OwnerDashboard = () => {
   const { user } = useAuth();
-  const { currentCompany, getCompanyByOwner, createCompany, getInvitationsByCompany } = useCompany();
+  const { currentCompany, createCompany, inviteEmployee, refreshCompany, invitations } = useCompany();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [company, setCompany] = useState(null);
-  const [invitations, setInvitations] = useState([]);
 
   useEffect(() => {
-    if (user) {
-      const userCompany = getCompanyByOwner(user.id) || currentCompany;
-      setCompany(userCompany);
-      if (userCompany) {
-        const companyInvitations = getInvitationsByCompany(userCompany.id);
-        setInvitations(companyInvitations);
-      }
-    }
-  }, [user, currentCompany, getCompanyByOwner, getInvitationsByCompany]);
+    refreshCompany();
+  }, [refreshCompany]);
+
+  useEffect(() => {
+    setCompany(currentCompany);
+  }, [currentCompany]);
 
   const handleCompanyCreated = (newCompany) => {
     setCompany(newCompany);
@@ -102,12 +98,12 @@ const OwnerDashboard = () => {
             {invitations.length > 0 && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Pending Invitations:</p>
-                {invitations.filter(inv => inv.status === 'pending').map(inv => (
-                  <div key={inv.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+                {invitations.filter(inv => inv.status === 'pending' || inv.expiresAt).map(inv => (
+                  <div key={inv.token || inv.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{inv.email}</p>
+                      <p className="text-sm font-medium text-gray-900">{inv.email || 'Invitation'}</p>
                       <p className="text-xs text-gray-500">
-                        {new Date(inv.createdAt).toLocaleDateString()}
+                        {inv.expiresAt ? `Expires ${new Date(inv.expiresAt).toLocaleDateString()}` : ''}
                       </p>
                     </div>
                     <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">

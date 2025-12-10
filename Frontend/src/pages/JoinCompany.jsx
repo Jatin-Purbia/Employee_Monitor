@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 const JoinCompany = () => {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { acceptInvitation, invitations } = useCompany();
+  const { acceptInvitation } = useCompany();
   const { user } = useAuth();
   const [invitation, setInvitation] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,19 +14,10 @@ const JoinCompany = () => {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    const foundInvitation = invitations.find(inv => inv.token === token);
-    if (foundInvitation) {
-      setInvitation(foundInvitation);
-      if (foundInvitation.status === 'accepted') {
-        setError('This invitation has already been accepted');
-      } else if (new Date(foundInvitation.expiresAt) < new Date()) {
-        setError('This invitation has expired');
-      }
-    } else {
-      setError('Invalid invitation link');
-    }
+    // We cannot verify invitation without hitting backend, show generic prompt
+    setInvitation({ token });
     setLoading(false);
-  }, [token, invitations]);
+  }, [token]);
 
   const handleAccept = async () => {
     if (!user) {
@@ -36,7 +27,7 @@ const JoinCompany = () => {
     }
 
     setLoading(true);
-    const result = acceptInvitation(token, user);
+    const result = await acceptInvitation(token);
     
     if (result.success) {
       setSuccess(true);
@@ -44,7 +35,7 @@ const JoinCompany = () => {
         navigate('/employee/dashboard');
       }, 2000);
     } else {
-      setError(result.error);
+      setError(result.error || 'Failed to accept invitation');
     }
     setLoading(false);
   };
@@ -96,8 +87,8 @@ const JoinCompany = () => {
               </div>
 
               <div className="mb-8 p-5 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm font-semibold text-blue-900 mb-2">Invited Email:</p>
-                <p className="text-blue-700">{invitation.email}</p>
+                <p className="text-sm font-semibold text-blue-900 mb-2">Invitation Token</p>
+                <p className="text-blue-700 break-all">{invitation.token}</p>
               </div>
 
               {!user ? (

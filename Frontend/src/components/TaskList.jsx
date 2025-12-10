@@ -29,12 +29,12 @@ const TaskList = () => {
           >
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h3 className="font-medium text-gray-900 mb-3">{task.task}</h3>
+                <h3 className="font-medium text-gray-900 mb-3">{task.description || task.task}</h3>
                 <div className="text-sm text-gray-600 space-y-1.5">
                   <p>Start: {formatDateTime(task.startTime)}</p>
                   <p>End: {formatDateTime(task.endTime)}</p>
                   <p>Duration: {formatDuration(task.duration)}</p>
-                  <p className="text-blue-600">Screenshots: {task.screenshots}</p>
+                  <p className="text-blue-600">Screenshots: {task.screenshotCount ?? task.screenshots}</p>
                 </div>
               </div>
               <button
